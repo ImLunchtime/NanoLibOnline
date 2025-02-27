@@ -43,6 +43,9 @@ INSTALLED_APPS = [
     'subscriptions.apps.SubscriptionsConfig',
     'circulation.apps.CirculationConfig',
     'frontend.apps.FrontendConfig',
+    'ckeditor',
+    'ckeditor_uploader',
+    'blog.apps.BlogConfig',
 ]
 
 MIDDLEWARE = [
@@ -131,3 +134,13 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Add these settings for media files (for avatars)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# CKEditor settings
+CKEDITOR_UPLOAD_PATH = "uploads/"
+CKEDITOR_CONFIGS = {
+    'default': {
+        'toolbar': 'Full',
+        'height': 300,
+        'width': '100%',
+    },
+}
