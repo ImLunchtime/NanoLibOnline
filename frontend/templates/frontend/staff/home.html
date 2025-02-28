@@ -1,0 +1,67 @@
+{% extends 'frontend/staff/base.html' %}
+
+{% block staff_content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Staff Dashboard</h1>
+</div>
+
+<div class="row g-4">
+    <!-- Quick Stats -->
+    <div class="col-md-3">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <h5 class="card-title">Active Borrows</h5>
+                <p class="card-text display-6">{{ active_borrows_count }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-warning">
+            <div class="card-body">
+                <h5 class="card-title">Overdue Items</h5>
+                <p class="card-text display-6">{{ overdue_count }}</p>
+            </div>
+        </div>
+    </div>
+    <!-- Add more stats cards as needed -->
+</div>
+
+<!-- Recent Activity -->
+<div class="mt-4">
+    <h3>Recent Activity</h3>
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>User</th>
+                    <th>Item</th>
+                    <th>Action</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for record in recent_records %}
+                <tr>
+                    <td>{{ record.created|date:"Y-m-d H:i" }}</td>
+                    <td>{{ record.borrower.user.username }}</td>
+                    <td>
+                        {% if record.book %}
+                            {{ record.book.nl_code }}
+                        {% else %}
+                            Bundle #{{ record.bundle.bundle_id }}
+                        {% endif %}
+                    </td>
+                    <td>{{ record.get_status_display }}</td>
+                    <td>
+                        <span class="badge bg-{{ record.status|lower }}">
+                            {{ record.get_status_display }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %} 

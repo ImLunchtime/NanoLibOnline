@@ -1,0 +1,186 @@
+{% extends 'frontend/staff/base.html' %}
+
+{% block staff_content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Book Return</h1>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <!-- Book Search Form -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Find Book to Return</h5>
+                <form id="bookSearchForm" class="mb-3">
+                    <div class="input-group">
+                        <input type="text" id="nlCode" class="form-control" placeholder="Enter NL Code" autofocus>
+                        <button class="btn btn-outline-primary" type="submit">Search</button>
+                    </div>
+                </form>
+                <div id="bookDetails" class="d-none">
+                    <!-- Book details will be populated here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Return Form -->
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Return Details</h5>
+                <form id="returnForm" method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="book_id" id="bookId">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Notes (Optional)</label>
+                        <textarea name="notes" class="form-control" rows="3"></textarea>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" disabled>Return Book</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Returns -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Recent Returns</h5>
+                <div class="list-group" id="recentReturns">
+                    {% for record in recent_returns %}
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">{{ record.book.nl_code }}</h6>
+                            <small>{{ record.returned_date|date:"Y-m-d H:i" }}</small>
+                        </div>
+                        <p class="mb-1">{{ record.book.profile.title }}</p>
+                        <small>Returned by: {{ record.borrower.user.username }}</small>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const bookSearchForm = document.getElementById('bookSearchForm');
+    const returnForm = document.getElementById('returnForm');
+    const bookDetails = document.getElementById('bookDetails');
+    
+    // Book search
+    bookSearchForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const nlCode = document.getElementById('nlCode').value;
+        
+        try {
+            const response = await fetch(`{% url 'frontend:search_books' %}?nl_code=${encodeURIComponent(nlCode)}`);
+            const data = await response.json();
+            
+            if (data.books.length > 0) {
+                const book = data.books[0];
+                if (book.status === 'Normal') {
+                    bookDetails.innerHTML = `
+                        <div class="alert alert-warning">
+                            <h6>${book.title}</h6>
+                            <p class="mb-0">This book is not currently borrowed.</p>
+                        </div>
+                    `;
+                    document.getElementById('bookId').value = '';
+                    returnForm.querySelector('button[type=submit]').disabled = true;
+                } else {
+                    bookDetails.innerHTML = `
+                        <div class="alert alert-info">
+                            <h6>${book.title}</h6>
+                            <p class="mb-0">NL Code: ${book.nl_code}</p>
+                            <p class="mb-0">Status: ${book.status}</p>
+                        </div>
+                    `;
+                    document.getElementById('bookId').value = book.id;
+                    returnForm.querySelector('button[type=submit]').disabled = false;
+                }
+            } else {
+                bookDetails.innerHTML = `
+                    <div class="alert alert-danger">
+                        <p class="mb-0">No book found with this code.</p>
+                    </div>
+                `;
+                document.getElementById('bookId').value = '';
+                returnForm.querySelector('button[type=submit]').disabled = true;
+            }
+            bookDetails.classList.remove('d-none');
+        } catch (error) {
+            console.error('Error:', error);
+            bookDetails.innerHTML = `
+                <div class="alert alert-danger">
+                    <p class="mb-0">An error occurred while searching for the book.</p>
+                </div>
+            `;
+            bookDetails.classList.remove('d-none');
+        }
+    });
+    
+    // Return form submission
+    returnForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const submitButton = returnForm.querySelector('button[type=submit]');
+        submitButton.disabled = true;
+        
+        try {
+            const response = await fetch('{% url "circulation:return_book" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify({
+                    book_id: document.getElementById('bookId').value,
+                    notes: document.querySelector('[name=notes]').value
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                // Show success message and reset form
+                bookDetails.innerHTML = `
+                    <div class="alert alert-success">
+                        <p class="mb-0">${data.message}</p>
+                    </div>
+                `;
+                returnForm.reset();
+                document.getElementById('nlCode').value = '';
+                submitButton.disabled = true;
+                
+                // Reload page after 2 seconds to update recent returns
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+            } else {
+                bookDetails.innerHTML = `
+                    <div class="alert alert-danger">
+                        <p class="mb-0">${data.message}</p>
+                    </div>
+                `;
+                submitButton.disabled = false;
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            bookDetails.innerHTML = `
+                <div class="alert alert-danger">
+                    <p class="mb-0">An error occurred while processing the return.</p>
+                </div>
+            `;
+            submitButton.disabled = false;
+        }
+    });
+    
+    // Auto-focus NL code input when page loads
+    document.getElementById('nlCode').focus();
+});
+</script>
+{% endblock %} 

@@ -1,0 +1,318 @@
+{% extends 'frontend/staff/base.html' %}
+
+{% block staff_content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <div>
+        <a href="{% url 'frontend:staff_books' %}" class="btn btn-outline-secondary me-2">
+            <i class="bi bi-arrow-left"></i> Back to Books
+        </a>
+        <h1 class="h2 d-inline-block">Book Details: {{ book.nl_code }}</h1>
+    </div>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <button id="editButton" class="btn btn-primary me-2">
+            <i class="bi bi-pencil"></i> Edit
+        </button>
+        <button id="saveButton" class="btn btn-success d-none">
+            <i class="bi bi-lock"></i> Save & Lock
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <form id="bookForm">
+                    {% csrf_token %}
+                    <!-- Book Information -->
+                    <div class="mb-4">
+                        <h5 class="card-title">Book Information</h5>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">NL Code</label>
+                                <input type="text" class="form-control-plaintext" value="{{ book.nl_code }}" readonly data-readonly="true">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Status</label>
+                                <div class="view-mode">
+                                    <span class="badge bg-{{ book.status|lower }} form-control-plaintext">
+                                        {{ book.get_status_display }}
+                                    </span>
+                                </div>
+                                <div class="edit-mode d-none">
+                                    {% if is_borrowed %}
+                                        <span class="badge bg-{{ book.status|lower }} form-control-plaintext">
+                                            {{ book.get_status_display }} (Cannot change while borrowed)
+                                        </span>
+                                    {% else %}
+                                        <select class="form-select" name="status">
+                                            {% for status_code, status_name in book_statuses %}
+                                            <option value="{{ status_code }}" {% if status_code == book.status %}selected{% endif %}>
+                                                {{ status_name }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Title</label>
+                                <input type="text" class="form-control-plaintext" name="title" value="{{ book.profile.name }}" readonly>
+                            </div>
+                            
+                            <!-- Author Field with Select -->
+                            <div class="col-md-6">
+                                <label class="form-label">Author</label>
+                                <div class="view-mode">
+                                    <input type="text" class="form-control-plaintext" value="{{ book.profile.author.name }}" readonly>
+                                </div>
+                                <div class="edit-mode d-none">
+                                    <select class="form-select" name="author_id">
+                                        {% for author in authors %}
+                                        <option value="{{ author.id }}" {% if author.id == book.profile.author.id %}selected{% endif %}>
+                                            {{ author.name }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- Series Field with Select -->
+                            <div class="col-md-6">
+                                <label class="form-label">Series</label>
+                                <div class="view-mode">
+                                    <input type="text" class="form-control-plaintext" value="{{ book.profile.series.name|default:'None' }}" readonly>
+                                </div>
+                                <div class="edit-mode d-none">
+                                    <select class="form-select" name="series_id">
+                                        <option value="">-- None --</option>
+                                        {% for series_item in series %}
+                                        <option value="{{ series_item.id }}" {% if book.profile.series and series_item.id == book.profile.series.id %}selected{% endif %}>
+                                            {{ series_item.name }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label class="form-label">ISBN</label>
+                                <input type="text" class="form-control-plaintext" name="isbn" value="{{ book.profile.isbn }}" readonly>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Description</label>
+                                <textarea class="form-control-plaintext" name="description" rows="3" readonly>{{ book.profile.description }}</textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Additional Information -->
+                    <div class="mb-4">
+                        <h5 class="card-title">Additional Information</h5>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Publisher</label>
+                                <input type="text" class="form-control-plaintext" name="publisher" value="{{ book.profile.publisher }}" readonly>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Publication Year</label>
+                                <input type="text" class="form-control-plaintext" name="publication_year" value="{{ book.profile.publication_year }}" readonly>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Language</label>
+                                <input type="text" class="form-control-plaintext" name="language" value="{{ book.profile.language }}" readonly>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Pages</label>
+                                <input type="number" class="form-control-plaintext" name="pages" value="{{ book.profile.pages }}" readonly>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <!-- Borrowing History -->
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Borrowing History</h5>
+                <div class="list-group">
+                    {% for record in borrow_history %}
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">{{ record.borrower.user.username }}</h6>
+                            <small class="text-muted">{{ record.borrowed_date|date:"Y-m-d" }}</small>
+                        </div>
+                        <p class="mb-1">
+                            <span class="badge bg-{{ record.status|lower }}">{{ record.get_status_display }}</span>
+                        </p>
+                        <small>
+                            Due: {{ record.due_date|date:"Y-m-d" }}
+                            {% if record.returned_date %}
+                            <br>Returned: {{ record.returned_date|date:"Y-m-d" }}
+                            {% endif %}
+                        </small>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+{{ block.super }}
+<style>
+    .form-control-plaintext {
+        padding: 0.375rem 0;
+        margin-bottom: 0;
+        line-height: 1.5;
+        color: #212529;
+        background-color: transparent;
+        border: solid transparent;
+        border-width: 1px 0;
+    }
+    
+    .form-control-plaintext:focus {
+        outline: none;
+    }
+    
+    textarea.form-control-plaintext {
+        overflow-y: hidden;
+    }
+    
+    /* Add a subtle indicator that fields are editable when in edit mode */
+    .form-control {
+        background-color: rgba(13, 110, 253, 0.05);
+    }
+    
+    /* Status badge styling */
+    .badge {
+        font-size: 0.9rem;
+        padding: 0.4rem 0.6rem;
+    }
+    
+    .badge.form-control-plaintext {
+        display: inline-block;
+        width: auto;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const editButton = document.getElementById('editButton');
+    const saveButton = document.getElementById('saveButton');
+    const form = document.getElementById('bookForm');
+    const inputs = form.querySelectorAll('input[class="form-control-plaintext"], textarea[class="form-control-plaintext"]');
+    const viewModes = form.querySelectorAll('.view-mode');
+    const editModes = form.querySelectorAll('.edit-mode');
+    
+    // Enable editing
+    editButton.addEventListener('click', function() {
+        // Switch regular inputs
+        inputs.forEach(input => {
+            if (!input.hasAttribute('data-readonly')) {
+                input.classList.replace('form-control-plaintext', 'form-control');
+                input.readOnly = false;
+            }
+        });
+        
+        // Switch special fields (author, series, status)
+        viewModes.forEach(el => el.classList.add('d-none'));
+        editModes.forEach(el => el.classList.remove('d-none'));
+        
+        // Switch buttons
+        editButton.classList.add('d-none');
+        saveButton.classList.remove('d-none');
+    });
+    
+    // Save changes
+    saveButton.addEventListener('click', async function() {
+        try {
+            // Collect form data
+            const formData = {};
+            
+            // Get regular inputs
+            form.querySelectorAll('input[name], textarea[name]').forEach(input => {
+                formData[input.name] = input.value;
+            });
+            
+            // Get select values
+            form.querySelectorAll('select[name]').forEach(select => {
+                formData[select.name] = select.value;
+            });
+            
+            const response = await fetch('{% url "frontend:book_update" book.id %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify(formData)
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                // Disable editing for regular inputs
+                inputs.forEach(input => {
+                    if (!input.hasAttribute('data-readonly')) {
+                        input.classList.replace('form-control', 'form-control-plaintext');
+                        input.readOnly = true;
+                    }
+                });
+                
+                // Update displayed values for special fields
+                const authorSelect = form.querySelector('select[name="author_id"]');
+                const seriesSelect = form.querySelector('select[name="series_id"]');
+                
+                const authorText = authorSelect.options[authorSelect.selectedIndex].text;
+                form.querySelector('.view-mode input[value]').value = authorText;
+                
+                const seriesText = seriesSelect.value ? 
+                    seriesSelect.options[seriesSelect.selectedIndex].text : 'None';
+                form.querySelectorAll('.view-mode input[value]')[1].value = seriesText;
+                
+                // Switch back to view mode
+                viewModes.forEach(el => el.classList.remove('d-none'));
+                editModes.forEach(el => el.classList.add('d-none'));
+                
+                // Switch buttons
+                saveButton.classList.add('d-none');
+                editButton.classList.remove('d-none');
+                
+                // Show success message
+                const alert = document.createElement('div');
+                alert.className = 'alert alert-success alert-dismissible fade show';
+                alert.innerHTML = `
+                    Book details updated successfully
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                form.insertBefore(alert, form.firstChild);
+                
+                // Reload page to ensure all data is updated correctly
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+            } else {
+                throw new Error(result.error || 'Failed to update book details');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-danger alert-dismissible fade show';
+            alert.innerHTML = `
+                ${error.message || 'Failed to update book details'}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            form.insertBefore(alert, form.firstChild);
+        }
+    });
+});
+</script>
+{% endblock %} 

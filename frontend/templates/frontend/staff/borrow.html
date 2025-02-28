@@ -1,0 +1,234 @@
+{% extends 'frontend/staff/base.html' %}
+
+{% block staff_content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Book Borrowing</h1>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <!-- Book Search Form -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Find Book</h5>
+                <form id="bookSearchForm" class="mb-3">
+                    <div class="input-group">
+                        <input type="text" id="nlCode" class="form-control" placeholder="Enter NL Code">
+                        <button class="btn btn-outline-primary" type="submit">Search</button>
+                    </div>
+                </form>
+                <div id="bookDetails" class="d-none">
+                    <!-- Book details will be populated here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- User Search Form -->
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Find User</h5>
+                <div class="mb-3">
+                    <input type="text" id="userSearch" class="form-control" placeholder="Search by username or name">
+                </div>
+                <div id="userResults" class="list-group">
+                    <!-- User search results will be populated here -->
+                </div>
+                <div id="selectedUser" class="mt-3 d-none">
+                    <!-- Selected user details will be shown here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <!-- Borrow Form -->
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Create Borrow Record</h5>
+                <form id="borrowForm" method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="book_id" id="bookId">
+                    <input type="hidden" name="user_id" id="userId">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Due Date</label>
+                        <div class="alert alert-info">
+                            Books are due 30 days from today.
+                            <strong>Due date will be: <span id="calculatedDueDate">{{ due_date|date:"Y-m-d" }}</span></strong>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Notes</label>
+                        <textarea name="notes" class="form-control" rows="3"></textarea>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" disabled>Create Borrow Record</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const bookSearchForm = document.getElementById('bookSearchForm');
+    const userSearch = document.getElementById('userSearch');
+    const borrowForm = document.getElementById('borrowForm');
+    
+    // Calculate and display due date (30 days from today)
+    const today = new Date();
+    const dueDate = new Date(today);
+    dueDate.setDate(today.getDate() + 30);
+    document.getElementById('calculatedDueDate').textContent = dueDate.toISOString().split('T')[0];
+    
+    // Book search
+    bookSearchForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const nlCode = document.getElementById('nlCode').value;
+        try {
+            const response = await fetch(`{% url 'frontend:search_books' %}?nl_code=${encodeURIComponent(nlCode)}`);
+            const data = await response.json();
+            const bookDetails = document.getElementById('bookDetails');
+            
+            if (data.books.length > 0) {
+                const book = data.books[0]; // Get first match
+                bookDetails.innerHTML = `
+                    <div class="alert alert-info">
+                        <h6>${book.title}</h6>
+                        <p class="mb-0">NL Code: ${book.nl_code}</p>
+                        <p class="mb-0">Author: ${book.author}</p>
+                        <p class="mb-0">Status: ${book.status}</p>
+                    </div>
+                `;
+                bookDetails.classList.remove('d-none');
+                document.getElementById('bookId').value = book.id;
+                updateSubmitButton();
+            } else {
+                bookDetails.innerHTML = `
+                    <div class="alert alert-warning">
+                        No book found with this code.
+                    </div>
+                `;
+                bookDetails.classList.remove('d-none');
+                document.getElementById('bookId').value = '';
+                updateSubmitButton();
+            }
+        } catch (error) {
+            console.error('Error:', error);
+        }
+    });
+    
+    // User search
+    let searchTimeout;
+    userSearch.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(async function() {
+            const query = userSearch.value;
+            if (query.length < 2) return;
+            
+            try {
+                const response = await fetch(`{% url 'frontend:search_users' %}?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+                const resultsDiv = document.getElementById('userResults');
+                
+                if (data.users.length > 0) {
+                    resultsDiv.innerHTML = data.users.map(user => `
+                        <button type="button" class="list-group-item list-group-item-action"
+                                data-user-id="${user.id}"
+                                data-user-name="${user.full_name}">
+                            ${user.username} (${user.full_name})
+                        </button>
+                    `).join('');
+                } else {
+                    resultsDiv.innerHTML = `
+                        <div class="list-group-item text-muted">
+                            No users found
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }, 300);
+    });
+    
+    // User selection
+    document.getElementById('userResults').addEventListener('click', function(e) {
+        if (e.target.matches('[data-user-id]')) {
+            const userId = e.target.dataset.userId;
+            const userName = e.target.dataset.userName;
+            
+            document.getElementById('selectedUser').innerHTML = `
+                <div class="alert alert-info">
+                    Selected User: ${userName}
+                </div>
+            `;
+            document.getElementById('selectedUser').classList.remove('d-none');
+            document.getElementById('userId').value = userId;
+            updateSubmitButton();
+        }
+    });
+    
+    // Form submission
+    borrowForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const submitButton = borrowForm.querySelector('button[type=submit]');
+        submitButton.disabled = true;
+        
+        try {
+            const response = await fetch('{% url "circulation:create_borrow" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify({
+                    book_id: document.getElementById('bookId').value,
+                    user_id: document.getElementById('userId').value,
+                    notes: document.querySelector('[name=notes]').value
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                // Show success message
+                const alert = document.createElement('div');
+                alert.className = 'alert alert-success';
+                alert.textContent = `${data.message} Due date: ${data.due_date}`;
+                borrowForm.insertBefore(alert, borrowForm.firstChild);
+                
+                // Reset form after 2 seconds
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+            } else {
+                // Show error message
+                const alert = document.createElement('div');
+                alert.className = 'alert alert-danger';
+                alert.textContent = data.message;
+                borrowForm.insertBefore(alert, borrowForm.firstChild);
+                submitButton.disabled = false;
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-danger';
+            alert.textContent = 'An error occurred while processing your request.';
+            borrowForm.insertBefore(alert, borrowForm.firstChild);
+            submitButton.disabled = false;
+        }
+    });
+    
+    function updateSubmitButton() {
+        const bookId = document.getElementById('bookId').value;
+        const userId = document.getElementById('userId').value;
+        const submitButton = borrowForm.querySelector('button[type=submit]');
+        submitButton.disabled = !(bookId && userId);
+    }
+});
+</script>
+{% endblock %} 
