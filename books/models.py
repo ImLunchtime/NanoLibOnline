@@ -60,6 +60,7 @@ class Book(models.Model):
         BORROWED = 'BOR', 'Borrowed'
         BOOKED = 'BOK', 'Booked'
         WRITTEN_OFF = 'WOF', 'Written Off'
+        LOST = 'LOS', 'Lost'
         IN_BUNDLE = 'BUN', 'In Bundle'
     
     profile = models.ForeignKey(

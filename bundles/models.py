@@ -9,6 +9,7 @@ class Bundle(models.Model):
         NORMAL = 'NOR', 'Normal'
         BORROWED = 'BOR', 'Borrowed'
         PREPARING = 'PRE', 'Preparing'
+        LOST = 'LOS', 'Lost'
     
     # Required fields
     bundle_id = models.CharField(

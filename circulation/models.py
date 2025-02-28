@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from books.models import Book
 from bundles.models import Bundle
+from users.models import Profile
 
 class BaseBorrowing(models.Model):
     """Abstract base class for borrowing records"""
@@ -111,3 +112,106 @@ class BundleBorrowing(BaseBorrowing):
                 status__in=[self.Status.PENDING, self.Status.BORROWED]
             ).count()):
             raise ValidationError("User has reached their maximum bundle borrowing limit")
+
+class BorrowRecord(models.Model):
+    """Record of borrowing books or bundles"""
+    class Status(models.TextChoices):
+        ACTIVE = 'ACT', 'Active'
+        RETURNED = 'RET', 'Returned'
+        OVERDUE = 'OVD', 'Overdue'
+        LOST = 'LOS', 'Lost'
+    
+    borrower = models.ForeignKey(
+        Profile,
+        on_delete=models.PROTECT,
+        related_name='borrow_records'
+    )
+    book = models.ForeignKey(
+        Book,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='borrow_records'
+    )
+    bundle = models.ForeignKey(
+        Bundle,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='borrow_records'
+    )
+    status = models.CharField(
+        max_length=3,
+        choices=Status.choices,
+        default=Status.ACTIVE
+    )
+    
+    # Dates
+    borrowed_date = models.DateTimeField(default=timezone.now)
+    due_date = models.DateTimeField()
+    returned_date = models.DateTimeField(null=True, blank=True)
+    
+    # Metadata
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
+    notes = models.TextField(blank=True)
+    
+    class Meta:
+        ordering = ['-borrowed_date']
+        indexes = [
+            models.Index(fields=['status', '-borrowed_date']),
+            models.Index(fields=['borrower', 'status']),
+            models.Index(fields=['book', 'status']),
+            models.Index(fields=['bundle', 'status']),
+        ]
+    
+    def clean(self):
+        """Validate that either book or bundle is set, but not both"""
+        if not self.book and not self.bundle:
+            raise ValidationError("Either book or bundle must be specified")
+        if self.book and self.bundle:
+            raise ValidationError("Cannot borrow both book and bundle")
+    
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+        
+        # Update book/bundle status
+        if self.status == self.Status.ACTIVE:
+            if self.book:
+                self.book.status = Book.Status.BORROWED
+                self.book.save()
+            if self.bundle:
+                self.bundle.status = Bundle.Status.BORROWED
+                self.bundle.save()
+    
+    def mark_as_returned(self):
+        """Mark the record as returned and update related objects"""
+        self.status = self.Status.RETURNED
+        self.returned_date = timezone.now()
+        
+        if self.book:
+            self.book.status = Book.Status.NORMAL
+            self.book.save()
+        if self.bundle:
+            self.bundle.status = Bundle.Status.NORMAL
+            self.bundle.save()
+        
+        self.save()
+    
+    def mark_as_lost(self):
+        """Mark the record as lost and update related objects"""
+        self.status = self.Status.LOST
+        
+        if self.book:
+            self.book.status = Book.Status.LOST
+            self.book.save()
+        if self.bundle:
+            self.bundle.status = Bundle.Status.LOST
+            self.bundle.save()
+        
+        self.save()
+    
+    def __str__(self):
+        item = self.book.nl_code if self.book else f"Bundle {self.bundle.bundle_id}"
+        return f"{self.borrower.user.username} - {item} ({self.get_status_display()})"

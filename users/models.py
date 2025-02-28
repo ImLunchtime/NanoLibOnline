@@ -51,6 +51,35 @@ class Profile(models.Model):
         sub = self.active_subscription
         return sub.bundle_borrowing_plan.max_bundles if sub and sub.bundle_borrowing_plan else 0
 
+    @property
+    def active_borrows(self):
+        """Return all active borrows for this user"""
+        return self.borrow_records.filter(status='ACT')
+    
+    @property
+    def borrowed_books(self):
+        """Return all currently borrowed books"""
+        return [record.book for record in self.active_borrows.filter(book__isnull=False)]
+    
+    @property
+    def borrowed_bundles(self):
+        """Return all currently borrowed bundles"""
+        return [record.bundle for record in self.active_borrows.filter(bundle__isnull=False)]
+    
+    def can_borrow(self):
+        """Check if user can borrow more items"""
+        # Add your business logic here
+        max_borrows = 5  # Example limit
+        return self.active_borrows.count() < max_borrows
+    
+    def has_overdue_items(self):
+        """Check if user has any overdue items"""
+        now = timezone.now()
+        return self.borrow_records.filter(
+            status='ACT',
+            due_date__lt=now
+        ).exists()
+
     def __str__(self):
         return f"{self.user.username}'s profile"
 
