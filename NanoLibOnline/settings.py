@@ -42,10 +42,13 @@ INSTALLED_APPS = [
     'bundles.apps.BundlesConfig',
     'subscriptions.apps.SubscriptionsConfig',
     'circulation.apps.CirculationConfig',
-    'frontend.apps.FrontendConfig',
     'ckeditor',
     'ckeditor_uploader',
     'blog.apps.BlogConfig',
+    'rest_framework',
+    'rest_framework.authtoken',  # For token authentication
+    'django_filters',  # For filtering support
+    'api.apps.ApiConfig',
 ]
 
 MIDDLEWARE = [
@@ -143,4 +146,22 @@ CKEDITOR_CONFIGS = {
         'height': 300,
         'width': '100%',
     },
+}
+
+# Django REST Framework settings
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.SearchFilter',
+        'rest_framework.filters.OrderingFilter',
+    ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 10
 }

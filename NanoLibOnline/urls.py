@@ -19,13 +19,11 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from rest_framework.authtoken import views as auth_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    # path('users/', include('users.urls')),
-    # path('books/', include('books.urls')),
-    # path('bundles/', include('bundles.urls')),
-    path('', include('frontend.urls')),
     path('ckeditor/', include('ckeditor_uploader.urls')),
-    path('api/circulation/', include('circulation.urls')),
+    path('api/', include('api.urls')),
+    path('api-token-auth/', auth_views.obtain_auth_token),  # For token authentication
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
